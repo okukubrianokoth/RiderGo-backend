@@ -10,9 +10,12 @@ export const initiateMpesaPayment = async (req, res) => {
       return res.status(400).json({ message: "Phone and amount required" });
     }
 
-    const formattedPhone = phone.startsWith("254")
-      ? phone
-      : `254${phone.substring(1)}`;
+    // Remove all non-digit characters
+    let formattedPhone = phone.toString().replace(/\D/g, "");
+    
+    if (formattedPhone.startsWith("0")) {
+      formattedPhone = `254${formattedPhone.substring(1)}`;
+    }
 
     const mpesaResponse = await stkPushRequest(
       formattedPhone,
@@ -65,8 +68,15 @@ export const mpesaCallback = async (req, res) => {
       return res.status(400).json({ message: "Phone number missing" });
     }
 
-    // Find rider by phone
-    const rider = await Rider.findOne({ phone: phoneNumber.toString() });
+    // Find rider by phone (handle different formats: 2547..., +2547..., 07...)
+    const mpesaPhone = phoneNumber.toString();
+    const possibleFormats = [
+      mpesaPhone,
+      `+${mpesaPhone}`,
+      `0${mpesaPhone.substring(3)}`
+    ];
+
+    const rider = await Rider.findOne({ phone: { $in: possibleFormats } });
 
     if (!rider) {
       console.log("Rider not found for phone:", phoneNumber);

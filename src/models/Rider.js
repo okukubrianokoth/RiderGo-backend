@@ -4,12 +4,12 @@ const riderSchema = new mongoose.Schema({
   phone: { type: String, unique: true, required: true },
   name: String,
   vehicleType: String,
-  numberPlate: String,
+  isVerified: { type: Boolean, default: false },
   otpAttempts: { type: Number, default: 0 },
 lastOtpSent: Date,
 profilePhoto: String,
-name: String,
 email: String,
+password: { type: String }, // Add password field
 
 nationalIdNumber: String,
 nationalIdImage: String,
@@ -17,7 +17,13 @@ nationalIdImage: String,
 drivingLicenseNumber: String,
 drivingLicenseImage: String,
 
-motorbikePlate: String,
+numberPlate: String,
+vehicleMake: String,
+vehicleModel: String,
+vehicleImage: String,
+
+emergencyContact: String,
+emergencyPhone: String,
 
   otp: String,
   otpExpires: Date,

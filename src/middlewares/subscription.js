@@ -7,6 +7,13 @@ export const checkSubscription = async (req, res, next) => {
     if (!rider)
       return res.status(404).json({ message: "Rider not found" });
 
+    // Check for 7-day free trial
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    const registrationDate = new Date(rider.createdAt).getTime();
+    if (Date.now() - registrationDate < sevenDays) {
+      return next();
+    }
+
     // subscription expired?
     if (!rider.subscriptionActive || !rider.subscriptionExpiresAt || rider.subscriptionExpiresAt < Date.now()) {
       return res.status(403).json({

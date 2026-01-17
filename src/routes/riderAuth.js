@@ -5,6 +5,7 @@ import {
   verifyRiderOtp,
   resendRiderOtp,
   updateRiderProfile,
+  getRiderProfile,
   paySubscription,
   getSubscriptionStatus
 } from "../controllers/riderController.js";
@@ -22,12 +23,14 @@ router.post("/verify", verifyRiderOtp);
 router.post("/resend-otp", resendRiderOtp);
 
 // 🆔 Rider profile — requires login
+router.get("/profile", protectRider, getRiderProfile);
 router.put(
   "/profile",
-  auth,
+  protectRider,
   upload.fields([
     { name: "idImage", maxCount: 1 },
-    { name: "licenseImage", maxCount: 1 }
+    { name: "licenseImage", maxCount: 1 },
+    { name: "vehicleImage", maxCount: 1 }
   ]),
   updateRiderProfile
 );

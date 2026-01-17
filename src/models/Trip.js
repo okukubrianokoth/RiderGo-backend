@@ -16,6 +16,19 @@ const tripSchema = new mongoose.Schema(
       lng: Number,
     },
 
+    // Live Rider Location
+    currentLocation: {
+      lat: Number,
+      lng: Number,
+      updatedAt: Date
+    },
+
+    packageDescription: String,
+    specialInstructions: String,
+    recipientName: String,
+    recipientPhone: String,
+    estimatedValue: Number,
+
     // NEW RULES
     postingFeePaid: { type: Boolean, default: false },
     postingFeeAmount: { type: Number, default: 100 },

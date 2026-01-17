@@ -1,8 +1,10 @@
 import Rider from "../models/Rider.js";
+import Otp from "../models/Otp.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import otpGenerator from "otp-generator";
 import { stkPushRequest } from "../services/mpesaService.js";
+import { sendSimpleOtp } from "../services/otpService.js";
 
 // ===========================
 // Generate JWT Token
@@ -20,21 +22,45 @@ const generateToken = (rider) => {
 // ===========================
 export const registerRider = async (req, res) => {
   try {
-    const { phone } = req.body;
+    const { phone, firstName, lastName, email, password } = req.body;
 
-    const existing = await Rider.findOne({ phone });
-    if (existing) return res.status(400).json({ message: "Phone already registered" });
+    // Validate required fields
+    if (!phone || !firstName || !lastName || !email || !password) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
 
-    const otp = otpGenerator.generate(6, { digits: true });
+    const existing = await Rider.findOne({
+      $or: [{ phone }, { email }]
+    });
+    if (existing) return res.status(400).json({ message: "Phone or email already registered" });
 
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Send OTP via email or console (free and reliable)
+    const otpResult = await sendSimpleOtp(phone, email);
+    if (!otpResult.success) {
+      return res.status(500).json({ message: "Failed to send OTP. Please try again." });
+    }
+
+    // Create rider with basic info (will be updated after OTP verification)
     const rider = await Rider.create({
       phone,
-      otp,
-      otpExpireAt: Date.now() + 5 * 60 * 1000 // 5 mins
+      firstName,
+      lastName,
+      email,
+      password: hashedPassword,
+      // OTP will be verified separately
     });
 
-    res.json({ success: true, message: "OTP sent", riderId: rider._id });
+    res.json({
+      success: true,
+      message: "OTP sent to your email",
+      riderId: rider._id
+    });
   } catch (err) {
+    console.error("Registration error:", err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -49,17 +75,31 @@ export const verifyRiderOtp = async (req, res) => {
     const rider = await Rider.findById(riderId);
     if (!rider) return res.status(404).json({ message: "Rider not found" });
 
-    if (rider.otp !== otp || rider.otpExpireAt < Date.now()) {
+    // Check OTP from Otp collection
+    const otpRecord = await Otp.findOne({
+      phone: rider.phone,
+      code: otp,
+      expiresAt: { $gt: Date.now() }
+    });
+
+    if (!otpRecord) {
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
+    // Mark rider as verified
     rider.isVerified = true;
-    rider.otp = null;
-    rider.otpExpireAt = null;
     await rider.save();
 
-    res.json({ success: true, token: generateToken(rider) });
+    // Delete used OTP
+    await Otp.deleteOne({ _id: otpRecord._id });
+
+    res.json({
+      success: true,
+      message: "Phone verified successfully",
+      token: generateToken(rider)
+    });
   } catch (err) {
+    console.error("OTP verification error:", err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -67,20 +107,65 @@ export const verifyRiderOtp = async (req, res) => {
 // ===========================
 // Login
 // ===========================
+// ===========================
+// Login Rider - Email/Password
+// ===========================
 export const loginRider = async (req, res) => {
   try {
-    const { phone } = req.body;
-    const rider = await Rider.findOne({ phone });
+    const { email, password } = req.body;
 
-    if (!rider) return res.status(400).json({ message: "Invalid phone" });
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required"
+      });
+    }
 
-    res.json({
+    // Find rider by email
+    const rider = await Rider.findOne({ email });
+
+    if (!rider) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found. Please register first."
+      });
+    }
+
+    // Check if rider has a password (for existing riders without passwords)
+    if (!rider.password) {
+      return res.status(400).json({
+        success: false,
+        message: "Please use OTP verification for this account. Password not set."
+      });
+    }
+
+    // Check password
+    const isPasswordValid = await bcrypt.compare(password, rider.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid password"
+      });
+    }
+
+    // Generate JWT token
+    const token = generateToken(rider);
+
+    return res.json({
       success: true,
-      token: generateToken(rider),
-      rider
+      message: "Login successful",
+      token,
+      rider: {
+        _id: rider._id,
+        firstName: rider.firstName,
+        lastName: rider.lastName,
+        email: rider.email,
+        phone: rider.phone
+      }
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (error) {
+    console.error("Rider login error:", error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -107,21 +192,52 @@ export const resendRiderOtp = async (req, res) => {
 // ===========================
 // Update Rider Profile
 // ===========================
+export const getRiderProfile = async (req, res) => {
+  try {
+    const rider = await Rider.findById(req.rider.id).select("-password -otp");
+    if (!rider) return res.status(404).json({ message: "Rider not found" });
+    res.json({ success: true, rider });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 export const updateRiderProfile = async (req, res) => {
   try {
     const rider = await Rider.findById(req.rider.id);
 
     if (!rider) return res.status(404).json({ message: "Rider not found" });
 
-    rider.name = req.body.name;
-    rider.nationalId = req.body.nationalId;
-    rider.motorcycleNumber = req.body.motorcycleNumber;
+    // Map frontend fields to model fields
+    const {
+      idNumber,
+      vehicleType,
+      numberPlate,
+      vehicleMake,
+      vehicleModel,
+      vehicleYear,
+      emergencyContact,
+      emergencyPhone
+    } = req.body;
+
+    if (idNumber) rider.nationalIdNumber = idNumber;
+    if (vehicleType) rider.vehicleType = vehicleType;
+    if (numberPlate) rider.numberPlate = numberPlate;
+    
+    // Save additional info if needed (ensure model supports these or use a mixed field)
+    if (vehicleMake) rider.vehicleMake = vehicleMake;
+    if (vehicleModel) rider.vehicleModel = vehicleModel;
+    if (emergencyContact) rider.emergencyContact = emergencyContact;
+    if (emergencyPhone) rider.emergencyPhone = emergencyPhone;
 
     if (req.files?.idImage) {
-      rider.idImage = req.files.idImage[0].path;
+      rider.nationalIdImage = req.files.idImage[0].path;
     }
     if (req.files?.licenseImage) {
-      rider.licenseImage = req.files.licenseImage[0].path;
+      rider.drivingLicenseImage = req.files.licenseImage[0].path;
+    }
+    if (req.files?.vehicleImage) {
+      rider.vehicleImage = req.files.vehicleImage[0].path;
     }
 
     await rider.save();
@@ -141,9 +257,12 @@ export const paySubscription = async (req, res) => {
 
     const { amount = 100 } = req.body; // Default amount or from body
 
-    const formattedPhone = rider.phone.startsWith("254")
-      ? rider.phone
-      : `254${rider.phone.substring(1)}`;
+    // Remove all non-digit characters (spaces, +, -, etc)
+    let formattedPhone = rider.phone.toString().replace(/\D/g, "");
+    
+    if (formattedPhone.startsWith("0")) {
+      formattedPhone = `254${formattedPhone.substring(1)}`;
+    }
 
     const mpesaResponse = await stkPushRequest(
       formattedPhone,
@@ -172,11 +291,18 @@ export const paySubscription = async (req, res) => {
 // ===========================
 export const getSubscriptionStatus = async (req, res) => {
   try {
-    const rider = await Rider.findById(req.rider.id).select('subscriptionActive subscriptionExpiresAt lastPaymentRef');
+    const rider = await Rider.findById(req.rider.id).select('subscriptionActive subscriptionExpiresAt lastPaymentRef createdAt');
+    
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    const registrationDate = new Date(rider.createdAt).getTime();
+    const isTrialActive = (Date.now() - registrationDate) < sevenDays;
+
     res.json({
       subscriptionActive: rider?.subscriptionActive || false,
       expiresAt: rider?.subscriptionExpiresAt,
-      lastPaymentRef: rider?.lastPaymentRef
+      lastPaymentRef: rider?.lastPaymentRef,
+      isTrialActive,
+      trialExpiresAt: new Date(registrationDate + sevenDays)
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

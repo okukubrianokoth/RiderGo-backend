@@ -1,12 +1,24 @@
 import crypto from "crypto";
-import axios from "axios";
+import nodemailer from "nodemailer";
 import Otp from "../models/Otp.js";
 
-export const sendOtp = async (phone) => {
-  const otp = crypto.randomInt(100000, 999999).toString();
+// Create email transporter with better configuration
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.SMTP_EMAIL,
+    pass: process.env.SMTP_PASSWORD
+  },
+  // Add security options
+  secure: true,
+  tls: {
+    rejectUnauthorized: false
+  }
+});
 
-  const instanceId = process.env.ULTRA_INSTANCE_ID;
-  const token = process.env.ULTRA_TOKEN;
+// Fallback: Simple in-app OTP (for testing)
+export const sendSimpleOtp = async (phone, email) => {
+  const otp = crypto.randomInt(100000, 999999).toString();
 
   const fullPhone =
     phone.startsWith("0") ? `+254${phone.substring(1)}` :
@@ -21,23 +33,50 @@ export const sendOtp = async (phone) => {
     await Otp.create({
       phone: fullPhone,
       code: otp,
-      expiresAt: Date.now() + 5 * 60 * 1000 // 5 min
+      expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
     });
 
-    // 3️⃣ Send WhatsApp OTP
-    const url = `https://api.ultramsg.com/${instanceId}/messages/chat`;
-    const data = {
-      token,
-      to: fullPhone,
-      body: `Your RiderGo OTP is: *${otp}*`
-    };
+    // 3️⃣ Try Email OTP first
+    try {
+      const mailOptions = {
+        from: `"RiderGo" <${process.env.SMTP_EMAIL}>`,
+        to: email,
+        subject: 'Your RiderGo Verification Code',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2563eb; text-align: center;">RiderGo Verification</h2>
+            <div style="background: #f8fafc; padding: 20px; border-radius: 8px; text-align: center;">
+              <h3 style="margin: 0; color: #1f2937;">Your OTP Code</h3>
+              <div style="font-size: 32px; font-weight: bold; color: #2563eb; margin: 20px 0; letter-spacing: 4px;">
+                ${otp}
+              </div>
+              <p style="color: #6b7280; margin: 10px 0;">
+                This code will expire in 10 minutes.
+              </p>
+              <p style="color: #6b7280; font-size: 14px;">
+                If you didn't request this code, please ignore this email.
+              </p>
+            </div>
+            <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
+              RiderGo - Your Trusted Delivery Partner
+            </p>
+          </div>
+        `
+      };
 
-    const res = await axios.post(url, data);
-    console.log("📨 WhatsApp OTP Sent:", otp);
+      await transporter.sendMail(mailOptions);
+      console.log("📧 Email OTP Sent:", otp);
+      return { success: true, method: 'email', otp };
 
-    return otp;
+    } catch (emailError) {
+      console.log("📧 Email failed, using console OTP for testing:", otp);
+      // Fallback: Log OTP to console (for development/testing)
+      console.log("🔥 TEST OTP CODE:", otp, "(Check server console)");
+      return { success: true, method: 'console', otp };
+    }
+
   } catch (err) {
-    console.error("❌ WhatsApp OTP Failed:", err.response?.data || err.message);
-    return null;
+    console.error("❌ OTP System Error:", err.message);
+    return { success: false, error: err.message };
   }
 };

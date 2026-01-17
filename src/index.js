@@ -10,6 +10,7 @@ import riderRoutes from "./routes/riderAuth.js";
 import tripRoutes from "./routes/tripRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
 import mpesaRoutes from "./routes/mpesaPaymentRoutes.js";
+import clientRoutes from "./routes/clientAuth.js";
 
 // ...
 
@@ -28,6 +29,7 @@ app.use("/api/rider", riderRoutes);
 app.use("/api/trip", tripRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/payments/mpesa", mpesaRoutes);
+app.use("/api/client", clientRoutes);
 // Connect DB & Start server
 mongoose
   .connect(process.env.MONGO_URI)
