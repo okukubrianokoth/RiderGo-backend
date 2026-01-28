@@ -31,6 +31,19 @@ app.use("/api/wallet", walletRoutes);
 app.use("/api/payments/mpesa", mpesaRoutes);
 app.use("/api/client", clientRoutes);
 // Connect DB & Start server
+
+if (!process.env.MONGO_URI) {
+  console.error("Error: MONGO_URI is not defined. Please check your .env file.");
+  process.exit(1);
+}
+
+if (!process.env.JWT_SECRET) {
+  console.error("Error: JWT_SECRET is not defined. Please check your .env file.");
+  process.exit(1);
+}
+
+console.log("Attempting to connect to MongoDB...");
+
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
