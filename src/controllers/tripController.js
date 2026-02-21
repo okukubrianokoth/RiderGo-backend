@@ -1,6 +1,7 @@
 // src/controllers/tripController.js
 import Trip from "../models/Trip.js";
 import Message from "../models/Message.js";
+import Rider from "../models/Rider.js";
 
 // 1. Get Available Trips (Pending & Unassigned)
 export const getAvailableTrips = async (req, res) => {
@@ -97,17 +98,96 @@ export const startTrip = async (req, res) => {
   }
 };
 
+// 3b. Arrived at Pickup
+export const arrivedAtPickup = async (req, res) => {
+  try {
+    const { tripId } = req.body;
+    const trip = await Trip.findOne({ _id: tripId, riderId: req.rider.id });
+
+    if (!trip) return res.status(404).json({ message: "Trip not found" });
+
+    trip.status = "arrived_pickup";
+    await trip.save();
+
+    res.json({ success: true, message: "Rider arrived at pickup", trip });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 3c. Confirm Pickup (Package Collected)
+export const confirmPickup = async (req, res) => {
+  try {
+    const { tripId } = req.body;
+    
+    const updateData = { status: "picked_up" };
+    if (req.file) {
+      updateData.photoProofPickup = req.file.path;
+    }
+
+    const trip = await Trip.findOneAndUpdate(
+      { _id: tripId, riderId: req.rider.id },
+      updateData,
+      { new: true }
+    );
+    res.json({ success: true, message: "Package picked up", trip });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // 4. Complete Trip
 export const endTrip = async (req, res) => {
   try {
     const { tripId } = req.body;
-    const trip = await Trip.findOneAndUpdate(
-      { _id: tripId, riderId: req.rider.id },
-      { status: "completed" },
+    
+    const trip = await Trip.findOne({ _id: tripId, riderId: req.rider.id });
+
+    if (!trip) {
+      return res.status(404).json({ message: "Trip not found or you are not the assigned rider." });
+    }
+
+    if (trip.status === 'completed') {
+      return res.status(400).json({ message: "Trip is already completed." });
+    }
+
+    const updateData = { status: "completed", completedAt: new Date() };
+    if (req.file) {
+      updateData.photoProofDelivery = req.file.path;
+    }
+
+    const updatedTrip = await Trip.findByIdAndUpdate(
+      tripId,
+      updateData,
       { new: true }
     );
-    res.json({ success: true, message: "Trip completed", trip });
+
+    // --- Wallet Logic (Bolt-like) ---
+    const rider = await Rider.findById(req.rider.id);
+    if (rider) {
+      const tripAmount = updatedTrip.estimatedValue || 0;
+      const earnings = updatedTrip.riderEarnings || 0;
+      const commission = tripAmount - earnings;
+
+      if (updatedTrip.paymentMethod === 'cash') {
+        // Rider collected full cash.
+        // They owe the platform the commission.
+        // Wallet Balance decreases by commission.
+        rider.walletBalance = (rider.walletBalance || 0) - commission;
+      } else {
+        // Payment was digital (Wallet/Card/Mpesa to System).
+        // System owes rider their earnings.
+        // Wallet Balance increases by earnings.
+        rider.walletBalance = (rider.walletBalance || 0) + earnings;
+      }
+      
+      await rider.save();
+    }
+    // --- End Wallet Logic ---
+
+    res.json({ success: true, message: "Trip completed", trip: updatedTrip });
   } catch (error) {
+    console.error('End trip error:', error);
     res.status(500).json({ message: error.message });
   }
 };

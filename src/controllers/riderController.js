@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import otpGenerator from "otp-generator";
 import { stkPushRequest } from "../services/mpesaService.js";
 import { sendSimpleOtp } from "../services/otpService.js";
+import Withdrawal from "../models/Withdrawal.js";
 
 // ===========================
 // Generate JWT Token
@@ -66,6 +67,66 @@ export const registerRider = async (req, res) => {
 };
 
 // ===========================
+// RIDER WALLET
+// ===========================
+export const getRiderWallet = async (req, res) => {
+  try {
+    // Also fetching transaction history would be a good addition here later
+    const rider = await Rider.findById(req.rider.id).select('walletBalance');
+    if (!rider) {
+      return res.status(404).json({ message: "Rider not found" });
+    }
+
+    res.json({
+      success: true,
+      balance: rider.walletBalance || 0,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const requestWithdrawal = async (req, res) => {
+  try {
+    const { amount } = req.body;
+    const riderId = req.rider.id;
+
+    const rider = await Rider.findById(riderId);
+    if (!rider) {
+      return res.status(404).json({ message: "Rider not found" });
+    }
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: "A valid amount is required." });
+    }
+
+    if ((rider.walletBalance || 0) < amount) {
+      return res.status(400).json({ message: "Insufficient wallet balance." });
+    }
+
+    // Create a withdrawal request for admin to approve
+    const withdrawal = await Withdrawal.create({
+      riderId,
+      amount,
+      status: 'pending', // Admin will approve this
+      phone: rider.phone // For M-Pesa payout
+    });
+
+    // Optionally, you could deduct the amount from the balance here, or wait for admin approval.
+    // Waiting for approval is safer.
+
+    res.status(201).json({
+      success: true,
+      message: "Withdrawal request submitted successfully. It will be processed by an admin.",
+      withdrawal
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ===========================
 // Verify OTP
 // ===========================
 export const verifyRiderOtp = async (req, res) => {
@@ -106,9 +167,6 @@ export const verifyRiderOtp = async (req, res) => {
 
 // ===========================
 // Login
-// ===========================
-// ===========================
-// Login Rider - Email/Password
 // ===========================
 export const loginRider = async (req, res) => {
   try {

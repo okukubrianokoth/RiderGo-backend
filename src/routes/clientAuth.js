@@ -1,5 +1,5 @@
 import express from "express";
-import { registerClient, loginClient, verifyClientOtp, createDelivery, getClientDeliveries, getDelivery } from "../controllers/clientController.js";
+import { registerClient, loginClient, verifyClientOtp, createDelivery, getClientDeliveries, getDelivery, getDeliveryEstimate } from "../controllers/clientController.js";
 import { protect } from "../middlewares/authMiddleware.js";
 import { resendRiderOtp } from "../controllers/riderController.js";
 import { updateClientProfile } from "../controllers/clientController.js";
@@ -17,6 +17,7 @@ router.post("/resend-otp", resendRiderOtp);
 router.put("/profile", auth, upload.single("profilePhoto"), updateClientProfile);
 
 // Delivery routes
+router.post("/estimate", auth, getDeliveryEstimate);
 router.post("/delivery", auth, createDelivery);
 router.get("/deliveries", auth, getClientDeliveries);
 router.get("/delivery/:id", auth, getDelivery);

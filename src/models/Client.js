@@ -3,7 +3,8 @@ import mongoose from "mongoose";
 const clientSchema = new mongoose.Schema(
   {
     profilePhoto: String,
-name: String,
+    firstName: String,
+    lastName: String,
 email: String,
 
 homeAddress: String,
@@ -16,5 +17,3 @@ workAddress: String,
 );
 
 export default mongoose.model("Client", clientSchema);
-
-

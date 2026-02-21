@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - RiderGo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar h1 {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .navbar-menu {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .navbar-menu a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+
+        .navbar-menu a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .navbar-menu a.active {
+            background: rgba(255, 255, 255, 0.3);
+            border-bottom: 2px solid white;
+        }
+
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2) !important;
+            padding: 8px 16px !important;
+            border-radius: 6px !important;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .header {
+            margin-bottom: 30px;
+        }
+
+        .header h2 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .header p {
+            color: #999;
+            font-size: 14px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e0e0e0;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 12px 20px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #999;
+            border: none;
+            background: none;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+        }
+
+        .card h3 {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #333;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="number"],
+        input[type="text"],
+        input[type="time"],
+        select {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        input[type="number"]:focus,
+        input[type="text"]:focus,
+        input[type="time"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .input-suffix {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-danger {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #ff5252;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+            font-weight: 500;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            display: block;
+        }
+
+        .stat-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .stat-card-content {
+            flex: 1;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .stat-icon {
+            font-size: 48px;
+            opacity: 0.2;
+        }
+
+        .peak-hours-list {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .peak-hour-item {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid #667eea;
+        }
+
+        .peak-hour-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .peak-hour-info {
+            flex: 1;
+        }
+
+        .peak-hour-day {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .peak-hour-time {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .peak-hour-multiplier {
+            font-weight: 700;
+            color: #667eea;
+            font-size: 18px;
+            margin-right: 15px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f0f0f0;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .price-preview {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .price-preview h4 {
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.9;
+        }
+
+        .price-preview .preview-item {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .price-preview .preview-item:last-child {
+            border-bottom: none;
+            font-weight: 700;
+            font-size: 18px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            margin-top: 10px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+            background: #ccc;
+            border-radius: 13px;
+            cursor: pointer;
+            transition: background 0.3s;
+            border: none;
+            padding: 0;
+        }
+
+        .toggle-switch.active {
+            background: #667eea;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s;
+        }
+
+        .toggle-switch.active::after {
+            left: calc(100% - 24px);
+        }
+
+        .form-group-inline {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .form-group-inline label {
+            margin-bottom: 0;
+            flex: 1;
+        }
+
+        .form-group-inline button {
+            align-self: flex-end;
+            margin: 0;
+        }
+
+        .tabs-wrapper {
+            background: white;
+            border-radius: 12px;
+            padding: 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .tabs {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding: 0 30px;
+        }
+
+        .tab {
+            border-bottom: none;
+        }
+
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stat-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                gap: 10px;
+            }
+
+            .tab {
+                padding: 12px 10px;
+                font-size: 12px;
+            }
+
+            .navbar-menu {
+                gap: 10px;
+            }
+
+            .navbar-menu a {
+                font-size: 12px;
+                padding: 6px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>🚀 RiderGo Admin Dashboard</h1>
+        <div class="navbar-menu">
+            <a href="#" class="nav-link active" data-tab="pricing">Pricing</a>
+            <a href="#" class="nav-link" data-tab="surge">Surge Pricing</a>
+            <a href="#" class="nav-link" data-tab="peakHours">Peak Hours</a>
+            <a href="#" class="nav-link" data-tab="dashboard">Dashboard</a>
+            <a href="#" class="logout-btn">Logout</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Dashboard Tab -->
+        <div class="tab-content" id="dashboard-tab">
+            <div class="header">
+                <h2>📊 Dashboard Overview</h2>
+                <p>System statistics and current settings</p>
+            </div>
+
+            <div class="stat-cards" id="statsCards">
+                <div class="stat-card">
+                    <div class="stat-card-content">
+                        <div class="stat-label">Total Rides</div>
+                        <div class="stat-value" id="totalRides">--</div>
+                    </div>
+                    <div class="stat-icon">🚗</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-content">
+                        <div class="stat-label">Active Riders</div>
+                        <div class="stat-value" id="activeRiders">--</div>
+                    </div>
+                    <div class="stat-icon">👨‍💼</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-content">
+                        <div class="stat-label">Active Clients</div>
+                        <div class="stat-value" id="activeClients">--</div>
+                    </div>
+                    <div class="stat-icon">👤</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-content">
+                        <div class="stat-label">Pending Orders</div>
+                        <div class="stat-value" id="pendingOrders">--</div>
+                    </div>
+                    <div class="stat-icon">📦</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Current Settings Summary</h3>
+                <div id="settingsSummary" class="loading active">
+                    <div class="loading-spinner"></div>
+                    Loading settings...
+                </div>
+            </div>
+        </div>
+
+        <!-- Pricing Tab -->
+        <div class="tab-content active" id="pricing-tab">
+            <div class="header">
+                <h2>💰 Pricing Settings</h2>
+                <p>Configure your base fares and rates</p>
+            </div>
+
+            <div id="pricingMessage" class="message"></div>
+
+            <div class="card">
+                <h3>Base Pricing Configuration</h3>
+                <form id="pricingForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="baseFare">Base Fare (KES)</label>
+                            <input type="number" id="baseFare" name="baseFare" min="0" step="10">
+                            <span class="input-suffix">Starting price for any delivery</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="ratePerKm">Rate Per KM (KES)</label>
+                            <input type="number" id="ratePerKm" name="ratePerKm" min="0" step="1">
+                            <span class="input-suffix">Price per kilometer</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="ratePerMin">Rate Per Minute (KES)</label>
+                            <input type="number" id="ratePerMin" name="ratePerMin" min="0" step="1">
+                            <span class="input-suffix">Price per minute of travel</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="minFare">Minimum Fare (KES)</label>
+                            <input type="number" id="minFare" name="minFare" min="0" step="10">
+                            <span class="input-suffix">Lowest possible trip price</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="commissionRate">Commission Rate (%)</label>
+                            <input type="number" id="commissionRate" name="commissionRate" min="0" max="100" step="1">
+                            <span class="input-suffix">Platform commission from each trip</span>
+                        </div>
+                    </div>
+
+                    <div class="price-preview">
+                        <h4>Price Calculation Example</h4>
+                        <div class="preview-item">
+                            <span>Base Fare</span>
+                            <span id="previewBase">KES 150</span>
+                        </div>
+                        <div class="preview-item">
+                            <span>Distance Fare (10 km)</span>
+                            <span id="previewDistance">KES 400</span>
+                        </div>
+                        <div class="preview-item">
+                            <span>Time Fare (15 min)</span>
+                            <span id="previewTime">KES 75</span>
+                        </div>
+                        <div class="preview-item">
+                            <span>Total</span>
+                            <span id="previewTotal">KES 625</span>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="submit" class="btn-primary">💾 Save Pricing</button>
+                        <button type="reset" class="btn-secondary">↻ Reset</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Surge Pricing Tab -->
+        <div class="tab-content" id="surge-tab">
+            <div class="header">
+                <h2>⚡ Surge Pricing Settings</h2>
+                <p>Manage dynamic pricing based on demand</p>
+            </div>
+
+            <div id="surgeMessage" class="message"></div>
+
+            <div class="card">
+                <h3>Rush Hour Surge</h3>
+                <form id="rushHourForm">
+                    <div class="form-group-inline">
+                        <label for="enableRushHour">Enable Rush Hour Surge</label>
+                        <button type="button" class="toggle-switch" id="enableRushHour"></button>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="rushHourMultiplier">Surge Multiplier (e.g., 1.3x)</label>
+                            <input type="number" id="rushHourMultiplier" name="rushHourMultiplier" min="1" step="0.1">
+                            <span class="input-suffix">Applied during rush hours (See Peak Hours tab)</span>
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button type="submit" class="btn-primary">💾 Save Rush Hour Settings</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>Demand-Based Surge</h3>
+                <form id="demandSurgeForm">
+                    <div class="form-group-inline">
+                        <label for="enableDemandSurge">Enable Demand-Based Surge</label>
+                        <button type="button" class="toggle-switch" id="enableDemandSurge"></button>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="activeTripsThreshold">Active Trips Threshold</label>
+                            <input type="number" id="activeTripsThreshold" name="activeTripsThreshold" min="1" step="1">
+                            <span class="input-suffix">If more orders than this, surge activates</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="demandMultiplier">Demand Multiplier (e.g., 1.2x)</label>
+                            <input type="number" id="demandMultiplier" name="demandMultiplier" min="1" step="0.1">
+                            <span class="input-suffix">Applied when demand exceeds threshold</span>
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button type="submit" class="btn-primary">💾 Save Demand Surge Settings</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Peak Hours Tab -->
+        <div class="tab-content" id="peakHours-tab">
+            <div class="header">
+                <h2>🕐 Peak Hours Configuration</h2>
+                <p>Set rush hour times when surge multiplier applies</p>
+            </div>
+
+            <div id="peakHoursMessage" class="message"></div>
+
+            <div class="card">
+                <h3>Add Peak Hours</h3>
+                <form id="peakHoursForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="peakDay">Day of Week</label>
+                            <select id="peakDay">
+                                <option value="monday">Monday</option>
+                                <option value="tuesday">Tuesday</option>
+                                <option value="wednesday">Wednesday</option>
+                                <option value="thursday">Thursday</option>
+                                <option value="friday">Friday</option>
+                                <option value="saturday">Saturday</option>
+                                <option value="sunday">Sunday</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="peakStartTime">Start Time</label>
+                            <input type="time" id="peakStartTime">
+                        </div>
+                        <div class="form-group">
+                            <label for="peakEndTime">End Time</label>
+                            <input type="time" id="peakEndTime">
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button type="submit" class="btn-primary">➕ Add Peak Hour</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>Current Peak Hours</h3>
+                <div class="peak-hours-list" id="peakHoursList">
+                    <div class="loading active">
+                        <div class="loading-spinner"></div>
+                        Loading peak hours...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // Configuration
+        // ==========================================
+        const API_BASE_URL = 'http://localhost:3000/api'; // Change to your API URL
+        const adminToken = localStorage.getItem('adminToken');
+        
+        // Example peak hours data (from localStorage or API)
+        let peakHours = JSON.parse(localStorage.getItem('peakHours')) || [
+            { day: 'monday', startTime: '07:00', endTime: '09:00', label: 'Monday - Morning Rush' },
+            { day: 'monday', startTime: '16:00', endTime: '19:00', label: 'Monday - Evening Rush' },
+            { day: 'friday', startTime: '17:00', endTime: '20:00', label: 'Friday - Evening Rush' }
+        ];
+
+        // ==========================================
+        // Initialize
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings();
+            loadStats();
+            setupEventListeners();
+        });
+
+        // ==========================================
+        // Settings Management
+        // ==========================================
+        async function loadSettings() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/settings`, {
+                    headers: {
+                        'Authorization': `Bearer ${adminToken}`
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success && data.settings) {
+                    const settings = data.settings;
+                    document.getElementById('baseFare').value = settings.baseFare || 150;
+                    document.getElementById('ratePerKm').value = settings.ratePerKm || 40;
+                    document.getElementById('ratePerMin').value = settings.ratePerMin || 5;
+                    document.getElementById('minFare').value = settings.minFare || 200;
+                    document.getElementById('commissionRate').value = (settings.commissionRate || 0.2) * 100;
+                    
+                    // Surge settings
+                    document.getElementById('enableRushHour').classList.toggle('active', settings.enableRushHourSurge);
+                    document.getElementById('rushHourMultiplier').value = settings.rushHourMultiplier || 1.3;
+                    
+                    document.getElementById('enableDemandSurge').classList.toggle('active', settings.enableDemandSurge);
+                    document.getElementById('activeTripsThreshold').value = settings.activeTripsThreshold || 50;
+                    document.getElementById('demandMultiplier').value = settings.demandMultiplier || 1.2;
+
+                    updatePricePreview();
+                    renderSettingsSummary(settings);
+                } else {
+                    showMessage('pricingMessage', 'Failed to load settings', 'error');
+                }
+            } catch (error) {
+                console.error('Load settings error:', error);
+                showMessage('pricingMessage', 'Network error while loading settings', 'error');
+            }
+        }
+
+        async function saveSettings(settingsData) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/settings`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminToken}`
+                    },
+                    body: JSON.stringify(settingsData)
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('pricingMessage', '✅ Settings saved successfully!', 'success');
+                    loadSettings();
+                } else {
+                    showMessage('pricingMessage', data.message || 'Failed to save settings', 'error');
+                }
+            } catch (error) {
+                console.error('Save settings error:', error);
+                showMessage('pricingMessage', 'Network error while saving settings', 'error');
+            }
+        }
+
+        // ==========================================
+        // Stats Loading
+        // ==========================================
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/dashboard`, {
+                    headers: {
+                        'Authorization': `Bearer ${adminToken}`
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success && data.stats) {
+                    document.getElementById('totalRides').textContent = data.stats.trips?.total || 0;
+                    document.getElementById('activeRiders').textContent = data.stats.riders?.total || 0;
+                    document.getElementById('activeClients').textContent = data.stats.clients?.total || 0;
+                    document.getElementById('pendingOrders').textContent = data.stats.trips?.pending || 0;
+                }
+            } catch (error) {
+                console.error('Load stats error:', error);
+            }
+        }
+
+        // ==========================================
+        // Event Listeners
+        // ==========================================
+        function setupEventListeners() {
+            // Tab navigation
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const tabName = link.dataset.tab;
+                    switchTab(tabName);
+                });
+            });
+
+            // Pricing form
+            document.getElementById('pricingForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const baseFare = parseFloat(document.getElementById('baseFare').value);
+                const ratePerKm = parseFloat(document.getElementById('ratePerKm').value);
+                const ratePerMin = parseFloat(document.getElementById('ratePerMin').value);
+                const minFare = parseFloat(document.getElementById('minFare').value);
+                const commissionRate = parseFloat(document.getElementById('commissionRate').value) / 100;
+
+                saveSettings({
+                    baseFare, ratePerKm, ratePerMin, minFare, commissionRate
+                });
+            });
+
+            // Pricing inputs - update preview
+            ['baseFare', 'ratePerKm', 'ratePerMin'].forEach(id => {
+                document.getElementById(id).addEventListener('input', updatePricePreview);
+            });
+
+            // Toggle switches
+            ['enableRushHour', 'enableDemandSurge'].forEach(id => {
+                document.getElementById(id).addEventListener('click', function() {
+                    this.classList.toggle('active');
+                });
+            });
+
+            // Rush hour form
+            document.getElementById('rushHourForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const enableRushHourSurge = document.getElementById('enableRushHour').classList.contains('active');
+                const rushHourMultiplier = parseFloat(document.getElementById('rushHourMultiplier').value);
+
+                saveSettings({ enableRushHourSurge, rushHourMultiplier });
+            });
+
+            // Demand surge form
+            document.getElementById('demandSurgeForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const enableDemandSurge = document.getElementById('enableDemandSurge').classList.contains('active');
+                const activeTripsThreshold = parseInt(document.getElementById('activeTripsThreshold').value);
+                const demandMultiplier = parseFloat(document.getElementById('demandMultiplier').value);
+
+                saveSettings({ enableDemandSurge, activeTripsThreshold, demandMultiplier });
+            });
+
+            // Peak hours form
+            document.getElementById('peakHoursForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const day = document.getElementById('peakDay').value;
+                const startTime = document.getElementById('peakStartTime').value;
+                const endTime = document.getElementById('peakEndTime').value;
+
+                if (!startTime || !endTime) {
+                    showMessage('peakHoursMessage', 'Please select start and end times', 'error');
+                    return;
+                }
+
+                // Add to peakHours array
+                peakHours.push({
+                    day,
+                    startTime,
+                    endTime,
+                    label: `${day.charAt(0).toUpperCase() + day.slice(1)} - ${startTime} to ${endTime}`
+                });
+
+                // Save to localStorage
+                localStorage.setItem('peakHours', JSON.stringify(peakHours));
+
+                // Reset form and update display
+                document.getElementById('peakHoursForm').reset();
+                renderPeakHours();
+                showMessage('peakHoursMessage', '✅ Peak hour added successfully!', 'success');
+            });
+
+            // Logout
+            document.querySelector('.logout-btn').addEventListener('click', (e) => {
+                e.preventDefault();
+                localStorage.removeItem('adminToken');
+                window.location.href = '/admin-login.html';
+            });
+        }
+
+        // ==========================================
+        // Tab Switching
+        // ==========================================
+        function switchTab(tabName) {
+            // Update nav links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.tab === tabName) {
+                    link.classList.add('active');
+                }
+            });
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.getElementById(tabName + '-tab').classList.add('active');
+        }
+
+        // ==========================================
+        // Price Preview
+        // ==========================================
+        function updatePricePreview() {
+            const baseFare = parseFloat(document.getElementById('baseFare').value) || 150;
+            const ratePerKm = parseFloat(document.getElementById('ratePerKm').value) || 40;
+            const ratePerMin = parseFloat(document.getElementById('ratePerMin').value) || 5;
+
+            const distanceFare = 10 * ratePerKm;
+            const timeFare = 15 * ratePerMin;
+            const total = baseFare + distanceFare + timeFare;
+
+            document.getElementById('previewBase').textContent = `KES ${baseFare}`;
+            document.getElementById('previewDistance').textContent = `KES ${distanceFare}`;
+            document.getElementById('previewTime').textContent = `KES ${timeFare}`;
+            document.getElementById('previewTotal').textContent = `KES ${total}`;
+        }
+
+        // ==========================================
+        // Settings Summary
+        // ==========================================
+        function renderSettingsSummary(settings) {
+            const summary = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr style="border-bottom: 1px solid #f0f0f0;">
+                        <td style="padding: 12px; text-align: left;">Base Fare</td>
+                        <td style="padding: 12px; text-align: right; font-weight: 600;">KES ${settings.baseFare}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f0f0f0;">
+                        <td style="padding: 12px; text-align: left;">Rate Per KM</td>
+                        <td style="padding: 12px; text-align: right; font-weight: 600;">KES ${settings.ratePerKm}/km</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f0f0f0;">
+                        <td style="padding: 12px; text-align: left;">Rate Per Minute</td>
+                        <td style="padding: 12px; text-align: right; font-weight: 600;">KES ${settings.ratePerMin}/min</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f0f0f0;">
+                        <td style="padding: 12px; text-align: left;">Minimum Fare</td>
+                        <td style="padding: 12px; text-align: right; font-weight: 600;">KES ${settings.minFare}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f0f0f0;">
+                        <td style="padding: 12px; text-align: left;">Commission Rate</td>
+                        <td style="padding: 12px; text-align: right; font-weight: 600;">${(settings.commissionRate * 100).toFixed(0)}%</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f0f0f0;">
+                        <td style="padding: 12px; text-align: left;">Rush Hour Surge</td>
+                        <td style="padding: 12px; text-align: right; font-weight: 600;">${settings.enableRushHourSurge ? '✅ Enabled' : '❌ Disabled'}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px; text-align: left;">Demand-Based Surge</td>
+                        <td style="padding: 12px; text-align: right; font-weight: 600;">${settings.enableDemandSurge ? '✅ Enabled' : '❌ Disabled'}</td>
+                    </tr>
+                </table>
+            `;
+            document.getElementById('settingsSummary').innerHTML = summary;
+        }
+
+        // ==========================================
+        // Peak Hours Management
+        // ==========================================
+        function renderPeakHours() {
+            const container = document.getElementById('peakHoursList');
+            
+            if (peakHours.length === 0) {
+                container.innerHTML = '<p style="color: #999; padding: 20px; text-align: center;">No peak hours configured yet.</p>';
+                return;
+            }
+
+            container.innerHTML = peakHours.map((hour, index) => `
+                <div class="peak-hour-item">
+                    <div class="peak-hour-info">
+                        <div class="peak-hour-day">${hour.label}</div>
+                        <div class="peak-hour-time">🕐 ${hour.startTime} - ${hour.endTime}</div>
+                    </div>
+                    <span class="peak-hour-multiplier">1.3x</span>
+                    <button type="button" class="btn-danger" style="width: auto; padding: 8px 12px; font-size: 12px;" onclick="deletePeakHour(${index})">Delete</button>
+                </div>
+            `).join('');
+        }
+
+        function deletePeakHour(index) {
+            peakHours.splice(index, 1);
+            localStorage.setItem('peakHours', JSON.stringify(peakHours));
+            renderPeakHours();
+            showMessage('peakHoursMessage', '✅ Peak hour deleted successfully!', 'success');
+        }
+
+        // ==========================================
+        // Helper Functions
+        // ==========================================
+        function showMessage(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `message ${type}`;
+            setTimeout(() => {
+                element.className = 'message';
+            }, 5000);
+        }
+
+        // Initial render
+        renderPeakHours();
+    </script>
+</body>
+</html>

@@ -11,6 +11,8 @@ import tripRoutes from "./routes/tripRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
 import mpesaRoutes from "./routes/mpesaPaymentRoutes.js";
 import clientRoutes from "./routes/clientAuth.js";
+import requestRoutes from "./routes/requestRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 
 // ...
 
@@ -30,6 +32,8 @@ app.use("/api/trip", tripRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/payments/mpesa", mpesaRoutes);
 app.use("/api/client", clientRoutes);
+app.use("/api/requests", requestRoutes);
+app.use("/api/admin", adminRoutes);
 // Connect DB & Start server
 
 if (!process.env.MONGO_URI) {
@@ -52,4 +56,8 @@ mongoose
       console.log(`Server running on port ${process.env.PORT || 5000}`)
     );
   })
-  .catch((err) => console.error(err));
+  .catch((err) => {
+    console.error("❌ MongoDB Connection Error:", err.message);
+    console.error("💡 Tip: Ensure MongoDB is running (sudo systemctl start mongod) or check your MONGO_URI.");
+    process.exit(1);
+  });

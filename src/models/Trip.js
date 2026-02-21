@@ -15,6 +15,9 @@ const tripSchema = new mongoose.Schema(
       lat: Number,
       lng: Number,
     },
+    
+    photoProofPickup: String,
+    photoProofDelivery: String,
 
     // Live Rider Location
     currentLocation: {
@@ -28,6 +31,15 @@ const tripSchema = new mongoose.Schema(
     recipientName: String,
     recipientPhone: String,
     estimatedValue: Number,
+    riderEarnings: Number,
+    
+    // Pricing Breakdown
+    fareBreakdown: {
+      baseFare: Number,
+      distanceFare: Number,
+      timeFare: Number,
+      surge: Number
+    },
 
     // NEW RULES
     postingFeePaid: { type: Boolean, default: false },
@@ -37,11 +49,12 @@ const tripSchema = new mongoose.Schema(
 
     // Rider cash (NOT paid by app — only displayed)
     riderCashExpected: { type: Number, default: 0 },
+    paymentMethod: { type: String, enum: ["cash", "wallet", "mpesa"], default: "cash" },
 
     serviceType: { type: String, enum: ["delivery", "ride"], required: true },
     status: {
       type: String,
-      enum: ["pending", "awaiting_payment", "assigned", "accepted", "rejected", "completed", "cancelled"],
+      enum: ["pending", "awaiting_payment", "assigned", "accepted", "rejected", "completed", "cancelled", "in_progress", "arrived_pickup", "picked_up"],
       default: "awaiting_payment",
     },
 
