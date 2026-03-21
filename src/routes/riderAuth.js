@@ -7,7 +7,14 @@ import {
   updateRiderProfile,
   getRiderProfile,
   paySubscription,
-  getSubscriptionStatus
+  getSubscriptionStatus,
+  updateRiderStatus,
+  updateRiderLocation,
+  getAvailableTrips,
+  acceptTrip,
+  updateTripStatus,
+  getRiderTrips,
+  getRiderEarnings
 } from "../controllers/riderController.js";
 
 import { auth, protectRider } from "../middlewares/auth.js";
@@ -43,5 +50,18 @@ router.get("/subscription/status", protectRider, getSubscriptionStatus);
 router.get("/home", protectRider, checkSubscription, (req, res) => {
   res.json({ message: "Subscription valid – rider allowed to work" });
 });
+
+// Rider status and location
+router.put("/status", protectRider, updateRiderStatus);
+router.put("/location", protectRider, updateRiderLocation);
+
+// Trip management
+router.get("/trips/available", protectRider, checkSubscription, getAvailableTrips);
+router.post("/trips/accept", protectRider, checkSubscription, acceptTrip);
+router.put("/trips/status", protectRider, checkSubscription, updateTripStatus);
+router.get("/trips", protectRider, getRiderTrips);
+
+// Earnings
+router.get("/earnings", protectRider, getRiderEarnings);
 
 export default router;

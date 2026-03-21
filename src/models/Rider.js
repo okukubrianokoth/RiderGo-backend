@@ -36,10 +36,15 @@ emergencyPhone: String,
   otpExpires: Date,
 
   subscriptionActive: Boolean,
-subscriptionExpires: Date,
-lastPaymentRef: String,
-subscriptionExpiresAt: { type: Date }
+  subscriptionExpiresAt: { type: Date }, // Unified subscription expiration field
 
-}, { timestamps: true });
+  isOnline: { type: Boolean, default: false },
+  lastSeen: { type: Date, default: Date.now },
+  currentLocation: {
+    lat: Number,
+    lng: Number,
+    updatedAt: { type: Date, default: Date.now }
+  },
+});
 
 export default mongoose.model("Rider", riderSchema);

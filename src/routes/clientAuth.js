@@ -1,8 +1,6 @@
 import express from "express";
-import { registerClient, loginClient, verifyClientOtp, createDelivery, getClientDeliveries, getDelivery, getDeliveryEstimate } from "../controllers/clientController.js";
+import { registerClient, loginClient, verifyClientOtp, createDelivery, getClientDeliveries, getDelivery, getDeliveryEstimate, resendClientOtp, updateClientProfile } from "../controllers/clientController.js";
 import { protect } from "../middlewares/authMiddleware.js";
-import { resendRiderOtp } from "../controllers/riderController.js";
-import { updateClientProfile } from "../controllers/clientController.js";
 import { auth } from "../middlewares/auth.js";
 import { upload } from "../middlewares/upload.js";
 
@@ -13,7 +11,7 @@ const router = express.Router();
 router.post("/register", registerClient);
 router.post("/login", loginClient);
 router.post("/verify", verifyClientOtp);
-router.post("/resend-otp", resendRiderOtp);
+router.post("/resend-otp", resendClientOtp);
 router.put("/profile", auth, upload.single("profilePhoto"), updateClientProfile);
 
 // Delivery routes

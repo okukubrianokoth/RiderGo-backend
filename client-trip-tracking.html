@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trip Tracking - RiderGo</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .status {
+            padding: 20px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .status.pending { color: #ffa500; }
+        .status.assigned { color: #007bff; }
+        .status.accepted { color: #28a745; }
+        .status.in_progress { color: #17a2b8; }
+        .status.arrived_pickup { color: #ffc107; }
+        .status.picked_up { color: #20c997; }
+        .status.completed { color: #28a745; }
+        .status.cancelled { color: #dc3545; }
+
+        .eta {
+            padding: 10px 20px;
+            text-align: center;
+            font-size: 16px;
+            background: #f8f9fa;
+        }
+
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+
+        .error {
+            color: #dc3545;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Trip Tracking</h1>
+            <p>Track your delivery in real-time</p>
+        </div>
+        <div id="status" class="status">Loading...</div>
+        <div id="eta" class="eta">ETA: Calculating...</div>
+        <div id="map"></div>
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const tripId = urlParams.get('tripId');
+        const token = localStorage.getItem('ridergo_token'); // Assuming token is stored here
+
+        if (!tripId) {
+            showError('No trip ID provided');
+            return;
+        }
+
+        if (!token) {
+            showError('Please login first');
+            return;
+        }
+
+        const map = L.map('map').setView([-1.2864, 36.8172], 13); // Default to Nairobi
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        let pickupMarker, dropoffMarker, riderMarker, routingControl;
+        let pollingInterval;
+
+        async function fetchTripDetails() {
+            try {
+                const response = await fetch(`/api/client/delivery/${tripId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch trip details');
+                }
+
+                const trip = await response.json();
+
+                updateStatus(trip.status);
+                updateMap(trip);
+
+                if (trip.status === 'completed' || trip.status === 'cancelled') {
+                    stopPolling();
+                }
+            } catch (error) {
+                console.error('Error fetching trip details:', error);
+                showError('Failed to load trip details');
+            }
+        }
+
+        function updateStatus(status) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = `Status: ${status.replace('_', ' ').toUpperCase()}`;
+            statusElement.className = `status ${status}`;
+        }
+
+        function updateMap(trip) {
+            const pickup = trip.pickupLocation;
+            const dropoff = trip.dropoffLocation;
+            const rider = trip.currentLocation;
+
+            // Clear existing markers and routing
+            if (pickupMarker) map.removeLayer(pickupMarker);
+            if (dropoffMarker) map.removeLayer(dropoffMarker);
+            if (riderMarker) map.removeLayer(riderMarker);
+            if (routingControl) map.removeControl(routingControl);
+
+            // Add pickup marker
+            if (pickup && pickup.lat && pickup.lng) {
+                pickupMarker = L.marker([pickup.lat, pickup.lng])
+                    .addTo(map)
+                    .bindPopup('Pickup: ' + (pickup.address || 'Pickup Location'));
+            }
+
+            // Add dropoff marker
+            if (dropoff && dropoff.lat && dropoff.lng) {
+                dropoffMarker = L.marker([dropoff.lat, dropoff.lng])
+                    .addTo(map)
+                    .bindPopup('Dropoff: ' + (dropoff.address || 'Dropoff Location'));
+            }
+
+            // Add rider marker if available
+            if (rider && rider.lat && rider.lng) {
+                riderMarker = L.marker([rider.lat, rider.lng], {
+                    icon: L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    })
+                })
+                .addTo(map)
+                .bindPopup('Rider Location');
+            }
+
+            // Add routing if both pickup and dropoff are available
+            if (pickup && dropoff && pickup.lat && pickup.lng && dropoff.lat && dropoff.lng) {
+                routingControl = L.Routing.control({
+                    waypoints: [
+                        L.latLng(pickup.lat, pickup.lng),
+                        L.latLng(dropoff.lat, dropoff.lng)
+                    ],
+                    routeWhileDragging: false,
+                    createMarker: () => null, // Don't create default markers
+                    lineOptions: {
+                        styles: [{ color: '#007bff', weight: 6 }]
+                    },
+                    serviceUrl: 'https://router.project-osrm.org/route/v1' // Free OSRM service
+                }).addTo(map);
+
+                // Update ETA when route is calculated
+                routingControl.on('routesfound', function(e) {
+                    const routes = e.routes;
+                    const summary = routes[0].summary;
+                    const etaMinutes = Math.round(summary.totalTime / 60);
+                    document.getElementById('eta').textContent = `ETA: ${etaMinutes} minutes`;
+                });
+            }
+
+            // Fit map to show all markers
+            const bounds = [];
+            if (pickup && pickup.lat && pickup.lng) bounds.push([pickup.lat, pickup.lng]);
+            if (dropoff && dropoff.lat && dropoff.lng) bounds.push([dropoff.lat, dropoff.lng]);
+            if (rider && rider.lat && rider.lng) bounds.push([rider.lat, rider.lng]);
+            if (bounds.length > 1) {
+                map.fitBounds(bounds, { padding: [20, 20] });
+            } else if (bounds.length === 1) {
+                map.setView(bounds[0], 15);
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('error').textContent = message;
+            document.getElementById('error').style.display = 'block';
+        }
+
+        function startPolling() {
+            fetchTripDetails(); // Initial fetch
+            pollingInterval = setInterval(fetchTripDetails, 10000); // Poll every 10 seconds
+        }
+
+        function stopPolling() {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+        }
+
+        // Start polling when page loads
+        startPolling();
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', stopPolling);
+    </script>
+</body>
+</html>

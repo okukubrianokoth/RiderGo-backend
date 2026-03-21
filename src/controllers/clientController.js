@@ -35,7 +35,7 @@ const getRouteDetails = async (pickupLat, pickupLng, dropoffLat, dropoffLng) => 
   try {
     const locationIqKey = process.env.LOCATIONIQ_ACCESS_TOKEN || 'pk.22ba93d5b8dc86ba2e8660de987c5d41';
 
-    // 1. Try LocationIQ first
+    // 1. Try LocationIQ first 
     if (locationIqKey) {
       // LocationIQ expects: lon,lat;lon,lat
       const coordinates = `${pickupLng},${pickupLat};${dropoffLng},${dropoffLat}`;
@@ -303,39 +303,57 @@ export const verifyClientOtp = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-export const resendRiderOtp = async (req, res) => {
-  const { phone } = req.body;
-  if (!phone) return res.status(400).json({ msg: "Phone number required" });
 
-  const rider = await Rider.findOne({ phone });
-  if (!rider) return res.status(404).json({ msg: "Rider not registered" });
+// RESEND CLIENT OTP
+export const resendClientOtp = async (req, res) => {
+  try {
+    const { clientId } = req.body;
 
-  // cooldown 2 mins
-  const cooldown = 2 * 60 * 1000;
-  if (rider.lastOtpSent && Date.now() - rider.lastOtpSent < cooldown) {
-    return res.status(429).json({
-      success: false,
-      message: "Wait 2 minutes before requesting another OTP"
+    if (!clientId) {
+      return res.status(400).json({
+        success: false,
+        message: "Client ID is required"
+      });
+    }
+
+    const client = await Client.findById(clientId);
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: "Client not found"
+      });
+    }
+
+    // Rate limiting: 2 minute cooldown
+    const cooldown = 2 * 60 * 1000;
+    if (client.lastOtpSent && Date.now() - client.lastOtpSent < cooldown) {
+      return res.status(429).json({
+        success: false,
+        message: "Wait 2 minutes before requesting another OTP"
+      });
+    }
+
+    // Send OTP via email
+    const otpResult = await sendSimpleOtp(client.phone, client.email);
+    if (!otpResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to resend OTP. Please try again."
+      });
+    }
+
+    // Update last OTP sent timestamp
+    client.lastOtpSent = new Date();
+    await client.save();
+
+    return res.json({
+      success: true,
+      message: "OTP resent successfully"
     });
+  } catch (error) {
+    console.error("Resend OTP error:", error);
+    res.status(500).json({ success: false, message: error.message });
   }
-
-  // max 3 per hour
-  const hourLimit = 60 * 60 * 1000;
-  if (rider.lastOtpSent && Date.now() - rider.lastOtpSent < hourLimit && rider.otpAttempts >= 3) {
-    return res.status(429).json({
-      success: false,
-      message: "OTP limit reached. Try again after 1hr"
-    });
-  }
-
-  const otp = await sendOtp(phone);
-  rider.otp = otp;
-  rider.otpExpires = Date.now() + 5 * 60 * 1000;
-  rider.lastOtpSent = Date.now();
-  rider.otpAttempts += 1;
-  await rider.save();
-
-  return res.json({ success: true, message: "OTP re-sent" });
 };
 export const updateClientProfile = async (req, res) => {
   const client = await Client.findById(req.user.id);
@@ -635,12 +653,24 @@ export const searchLocation = async (req, res) => {
     // Fallback to LocationIQ
     const url = `https://us1.locationiq.com/v1/autocomplete?key=${locationIqKey}&q=${encodeURIComponent(query)}&countrycodes=ke&format=json`;
     const response = await axios.get(url);
-    const results = Array.isArray(response.data) ? response.data.map(place => ({
+    let results = Array.isArray(response.data) ? response.data.map(place => ({
       name: place.display_place || (place.display_name ? place.display_name.split(',')[0] : place.name || ''),
       address: place.display_address || place.display_name || place.address || '',
       lat: place.lat,
       lon: place.lon
     })) : [];
+
+    // if still empty, provide a few hardcoded Kenyan landmark suggestions
+    if (results.length === 0) {
+      const lower = query.toLowerCase();
+      const staticPlaces = [
+        { name: 'Gate B, Embakasi', address: 'Embakasi, Nairobi', lat: -1.316, lon: 36.910 },
+        { name: 'Gate B, Juja', address: 'Juja, Kiambu', lat: -1.165, lon: 37.019 },
+        { name: 'Gate B, Ruiru', address: 'Ruiru, Kiambu', lat: -1.181, lon: 36.947 },
+        { name: 'Gate B, Thika Road', address: 'Thika Road, Nairobi', lat: -1.232, lon: 36.942 }
+      ];
+      results = staticPlaces.filter(p => p.name.toLowerCase().includes(lower));
+    }
 
     res.json({ success: true, results });
   } catch (error) {

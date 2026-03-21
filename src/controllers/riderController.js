@@ -236,14 +236,32 @@ export const resendRiderOtp = async (req, res) => {
     const rider = await Rider.findById(riderId);
     if (!rider) return res.status(404).json({ message: "Rider not found" });
 
-    const otp = otpGenerator.generate(6, { digits: true });
-    rider.otp = otp;
-    rider.otpExpireAt = Date.now() + 5 * 60 * 1000;
+    // Rate limiting: 2 minute cooldown
+    const cooldown = 2 * 60 * 1000;
+    if (rider.lastOtpSent && Date.now() - rider.lastOtpSent < cooldown) {
+      return res.status(429).json({
+        success: false,
+        message: "Wait 2 minutes before requesting another OTP"
+      });
+    }
+
+    // Send OTP via the proper service
+    const otpResult = await sendSimpleOtp(rider.phone, rider.email);
+    if (!otpResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to resend OTP. Please try again."
+      });
+    }
+
+    // Update rider metadata
+    rider.lastOtpSent = Date.now();
     await rider.save();
 
-    res.json({ success: true, message: "OTP resent" });
+    res.json({ success: true, message: "OTP resent successfully" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Resend OTP error:", err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -364,5 +382,165 @@ export const getSubscriptionStatus = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+// UPDATE RIDER ONLINE STATUS
+export const updateRiderStatus = async (req, res) => {
+  try {
+    const { isOnline } = req.body;
+    const rider = await Rider.findById(req.rider.id);
+    
+    if (!rider) return res.status(404).json({ message: "Rider not found" });
+    
+    rider.isOnline = isOnline;
+    rider.lastSeen = new Date();
+    await rider.save();
+    
+    res.json({ success: true, message: `Rider is now ${isOnline ? 'online' : 'offline'}` });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// UPDATE RIDER LOCATION
+export const updateRiderLocation = async (req, res) => {
+  try {
+    const { lat, lng } = req.body;
+    const rider = await Rider.findById(req.rider.id);
+    
+    if (!rider) return res.status(404).json({ message: "Rider not found" });
+    
+    rider.currentLocation = { lat, lng, updatedAt: new Date() };
+    rider.lastSeen = new Date();
+    await rider.save();
+    
+    res.json({ success: true, message: "Location updated" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// GET AVAILABLE TRIPS FOR RIDER
+export const getAvailableTrips = async (req, res) => {
+  try {
+    const trips = await Trip.find({ 
+      status: 'pending',
+      riderId: null // Not assigned yet
+    }).sort({ createdAt: -1 });
+    
+    res.json({ success: true, trips });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ACCEPT TRIP
+export const acceptTrip = async (req, res) => {
+  try {
+    const { tripId } = req.body;
+    const rider = await Rider.findById(req.rider.id);
+    
+    if (!rider) return res.status(404).json({ message: "Rider not found" });
+    
+    const trip = await Trip.findById(tripId);
+    if (!trip || trip.status !== 'pending') {
+      return res.status(400).json({ message: "Trip not available" });
+    }
+    
+    trip.riderId = rider._id;
+    trip.status = 'assigned';
+    trip.assignedAt = new Date();
+    await trip.save();
+    
+    res.json({ success: true, message: "Trip accepted", trip });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// UPDATE TRIP STATUS
+export const updateTripStatus = async (req, res) => {
+  try {
+    const { tripId, status, notes } = req.body;
+    const rider = await Rider.findById(req.rider.id);
+    
+    if (!rider) return res.status(404).json({ message: "Rider not found" });
+    
+    const trip = await Trip.findOne({ _id: tripId, riderId: rider._id });
+    if (!trip) return res.status(404).json({ message: "Trip not found" });
+    
+    const validStatuses = ['assigned', 'in_progress', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+    
+    trip.status = status;
+    if (status === 'in_progress') trip.startedAt = new Date();
+    if (status === 'completed') trip.completedAt = new Date();
+    if (notes) trip.notes = notes;
+    
+    await trip.save();
+    
+    res.json({ success: true, message: "Trip status updated", trip });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// GET RIDER TRIPS
+export const getRiderTrips = async (req, res) => {
+  try {
+    const trips = await Trip.find({ riderId: req.rider.id })
+      .populate('clientId', 'firstName lastName phone')
+      .sort({ createdAt: -1 });
+    
+    res.json({ success: true, trips });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// GET RIDER EARNINGS
+export const getRiderEarnings = async (req, res) => {
+  try {
+    const rider = await Rider.findById(req.rider.id);
+    if (!rider) return res.status(404).json({ message: "Rider not found" });
+    
+    // Today's earnings
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayEarnings = await Trip.aggregate([
+      { $match: { riderId: rider._id, status: 'completed', completedAt: { $gte: today } } },
+      { $group: { _id: null, total: { $sum: '$riderEarnings' } } }
+    ]);
+    
+    // Weekly earnings
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weeklyEarnings = await Trip.aggregate([
+      { $match: { riderId: rider._id, status: 'completed', completedAt: { $gte: weekAgo } } },
+      { $group: { _id: null, total: { $sum: '$riderEarnings' } } }
+    ]);
+    
+    // Monthly earnings
+    const monthAgo = new Date();
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+    const monthlyEarnings = await Trip.aggregate([
+      { $match: { riderId: rider._id, status: 'completed', completedAt: { $gte: monthAgo } } },
+      { $group: { _id: null, total: { $sum: '$riderEarnings' } } }
+    ]);
+    
+    res.json({
+      success: true,
+      earnings: {
+        today: todayEarnings[0]?.total || 0,
+        weekly: weeklyEarnings[0]?.total || 0,
+        monthly: monthlyEarnings[0]?.total || 0,
+        total: rider.walletBalance
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };
