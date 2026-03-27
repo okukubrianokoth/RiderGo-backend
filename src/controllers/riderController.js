@@ -39,10 +39,10 @@ export const registerRider = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Send OTP via email or console (free and reliable)
-    const otpResult = await sendSimpleOtp(phone, email);
+    // Send OTP via email (strict) with fallback disabled in production mode
+    const otpResult = await sendSimpleOtp(phone, email, { requireEmail: false });
     if (!otpResult.success) {
-      return res.status(500).json({ message: "Failed to send OTP. Please try again." });
+      return res.status(500).json({ message: `Failed to send OTP email: ${otpResult.error}` });
     }
 
     // Create rider with basic info (will be updated after OTP verification)
@@ -197,6 +197,13 @@ export const loginRider = async (req, res) => {
       });
     }
 
+    if (rider.status === 'blocked') {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been blocked. Please contact support."
+      });
+    }
+
     // Check password
     const isPasswordValid = await bcrypt.compare(password, rider.password);
     if (!isPasswordValid) {
@@ -207,7 +214,7 @@ export const loginRider = async (req, res) => {
     }
 
     // Generate JWT token
-    const token = generateToken(rider);
+    const token = generateToken(rider._id);
 
     return res.json({
       success: true,
@@ -246,11 +253,11 @@ export const resendRiderOtp = async (req, res) => {
     }
 
     // Send OTP via the proper service
-    const otpResult = await sendSimpleOtp(rider.phone, rider.email);
+    const otpResult = await sendSimpleOtp(rider.phone, rider.email, { requireEmail: true });
     if (!otpResult.success) {
       return res.status(500).json({
         success: false,
-        message: "Failed to resend OTP. Please try again."
+        message: `Failed to resend OTP email: ${otpResult.error}`
       });
     }
 
@@ -369,19 +376,88 @@ export const getSubscriptionStatus = async (req, res) => {
   try {
     const rider = await Rider.findById(req.rider.id).select('subscriptionActive subscriptionExpiresAt lastPaymentRef createdAt');
     
-    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    const twoMonths = 60 * 24 * 60 * 60 * 1000; // 60 days in milliseconds
     const registrationDate = new Date(rider.createdAt).getTime();
-    const isTrialActive = (Date.now() - registrationDate) < sevenDays;
+    const isTrialActive = (Date.now() - registrationDate) < twoMonths;
 
     res.json({
       subscriptionActive: rider?.subscriptionActive || false,
       expiresAt: rider?.subscriptionExpiresAt,
       lastPaymentRef: rider?.lastPaymentRef,
       isTrialActive,
-      trialExpiresAt: new Date(registrationDate + sevenDays)
+      trialExpiresAt: new Date(registrationDate + twoMonths)
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+// FORCE FREE 2-MONTH SUBSCRIPTION FOR TEST ACCOUNTS
+export const grantFreeSubscription = async (req, res) => {
+  // Backward compatibility: rider self-service route (if still used)
+  try {
+    const rider = await Rider.findById(req.rider.id);
+    if (!rider) return res.status(404).json({ success: false, message: 'Rider not found' });
+
+    const twoMonthsMs = 60 * 24 * 60 * 60 * 1000; // 60 days
+    rider.subscriptionActive = true;
+    rider.subscriptionExpiresAt = new Date(Date.now() + twoMonthsMs);
+    rider.subscriptionLastRefreshed = new Date();
+    await rider.save();
+
+    res.json({
+      success: true,
+      message: 'Free 2-month subscription granted successfully',
+      subscriptionExpiresAt: rider.subscriptionExpiresAt,
+      subscriptionLastRefreshed: rider.subscriptionLastRefreshed
+    });
+  } catch (err) {
+    console.error('Grant free subscription error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+import SubscriptionAudit from "../models/SubscriptionAudit.js";
+
+export const adminGrantFreeSubscription = async (req, res) => {
+  try {
+    const { riderId } = req.params;
+    const admin = req.admin;
+
+    if (!riderId) {
+      return res.status(400).json({ success: false, message: 'riderId is required' });
+    }
+
+    const rider = await Rider.findById(riderId);
+    if (!rider) return res.status(404).json({ success: false, message: 'Rider not found' });
+
+    const twoMonthsMs = 60 * 24 * 60 * 60 * 1000; // 60 days
+    rider.subscriptionActive = true;
+    rider.subscriptionExpiresAt = new Date(Date.now() + twoMonthsMs);
+    rider.subscriptionLastRefreshed = new Date();
+    await rider.save();
+
+    await SubscriptionAudit.create({
+      riderId: rider._id,
+      adminId: admin._id,
+      subscriptionExpiresAt: rider.subscriptionExpiresAt,
+      subscriptionLastRefreshed: rider.subscriptionLastRefreshed,
+      notes: req.body.notes || '2-month free trial granted by admin'
+    });
+
+    return res.json({
+      success: true,
+      message: 'Admin granted free 2-month subscription for rider',
+      rider: {
+        _id: rider._id,
+        subscriptionActive: rider.subscriptionActive,
+        subscriptionExpiresAt: rider.subscriptionExpiresAt,
+        subscriptionLastRefreshed: rider.subscriptionLastRefreshed
+      }
+    });
+  } catch (err) {
+    console.error('Admin grant free subscription error:', err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -424,11 +500,19 @@ export const updateRiderLocation = async (req, res) => {
 // GET AVAILABLE TRIPS FOR RIDER
 export const getAvailableTrips = async (req, res) => {
   try {
+    const rider = await Rider.findById(req.rider.id);
+    if (!rider) return res.status(404).json({ message: "Rider not found" });
+
+    // Ensure rider is verified and approved to see available trips
+    if (!rider.isVerified || rider.status !== 'approved') {
+      return res.status(403).json({ message: "Rider not verified or approved to view trips" });
+    }
+
     const trips = await Trip.find({ 
-      status: 'pending',
+      status: { $in: ['pending', 'awaiting_payment'] }, // Include awaiting_payment for visibility
       riderId: null // Not assigned yet
     }).sort({ createdAt: -1 });
-    
+
     res.json({ success: true, trips });
   } catch (error) {
     res.status(500).json({ message: error.message });

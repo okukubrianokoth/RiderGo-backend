@@ -35,8 +35,9 @@ emergencyPhone: String,
   otp: String,
   otpExpires: Date,
 
-  subscriptionActive: Boolean,
+  subscriptionActive: { type: Boolean, default: true },
   subscriptionExpiresAt: { type: Date }, // Unified subscription expiration field
+  subscriptionLastRefreshed: { type: Date },
 
   isOnline: { type: Boolean, default: false },
   lastSeen: { type: Date, default: Date.now },

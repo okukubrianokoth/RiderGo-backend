@@ -14,7 +14,9 @@ import {
   getPeakHours,
   addPeakHour,
   deletePeakHour,
-  updatePeakHour
+  updatePeakHour,
+  toggleRiderBlock,
+  toggleClientBlock
 } from '../controllers/adminController.js';
 import { protectAdmin } from '../middlewares/adminAuth.js';
 
@@ -27,7 +29,10 @@ router.get('/dashboard', protectAdmin, getDashboardStats);
 router.get('/stats', protectAdmin, getDashboardStats);
 router.get('/riders/pending', protectAdmin, getPendingRiders);
 router.get('/riders', protectAdmin, getRiders);
+router.post('/verify-rider', protectAdmin, verifyRider); // Alias for frontend compatibility
 router.post('/riders/verify', protectAdmin, verifyRider);
+router.post('/riders/toggle-block', protectAdmin, toggleRiderBlock);
+router.post('/clients/toggle-block', protectAdmin, toggleClientBlock);
 router.get('/clients', protectAdmin, getClients);
 router.get('/trips', protectAdmin, getTrips);
 router.get('/settings', protectAdmin, getSettings);

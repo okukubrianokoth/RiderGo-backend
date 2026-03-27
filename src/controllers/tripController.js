@@ -2,6 +2,9 @@
 import Trip from "../models/Trip.js";
 import Message from "../models/Message.js";
 import Rider from "../models/Rider.js";
+import axios from "axios";
+import RiderMatchingService from "../services/RiderMatchingService.js";
+import DynamicPricingService from "../services/DynamicPricingService.js";
 
 // 1. Get Available Trips (Pending & Unassigned)
 export const getAvailableTrips = async (req, res) => {
@@ -40,7 +43,130 @@ export const getAvailableTrips = async (req, res) => {
   }
 };
 
-// 7. Chat: Send Message
+// 6. Location autocomplete helper
+export const getLocationSuggestions = async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json({ success: true, suggestions: [] });
+    }
+
+    const token = process.env.LOCATIONIQ_ACCESS_TOKEN;
+    if (!token) {
+      return res.status(500).json({ message: 'LocationIQ API key not configured.' });
+    }
+
+    const response = await axios.get('https://us1.locationiq.com/v1/autocomplete.php', {
+      params: {
+        key: token,
+        q: query,
+        format: 'json',
+        limit: 6,
+        countrycodes: 'ke'
+      }
+    });
+
+    const suggestions = (response.data || []).map((item) => ({
+      display_name: item.display_name,
+      lat: item.lat,
+      lon: item.lon
+    }));
+
+    res.json({ success: true, suggestions });
+  } catch (error) {
+    console.error('Location suggestions error:', error);
+    res.status(500).json({ message: error.message || 'Failed to fetch location suggestions' });
+  }
+};
+
+// 7. Price estimate (AI/ML) for client input
+export const getPriceEstimate = async (req, res) => {
+  try {
+    const { pickup, dropoff, pickupLat, pickupLng, dropoffLat, dropoffLng } = req.body;
+
+    let pLat = pickupLat;
+    let pLng = pickupLng;
+    let dLat = dropoffLat;
+    let dLng = dropoffLng;
+
+    const token = process.env.LOCATIONIQ_ACCESS_TOKEN;
+    if (!token) {
+      return res.status(500).json({ message: 'LocationIQ API key not configured.' });
+    }
+
+    const geocode = async (address) => {
+      const r = await axios.get('https://us1.locationiq.com/v1/search.php', {
+        params: { key: token, q: address, format: 'json', limit: 1, countrycodes: 'ke' }
+      });
+      if (r.data && r.data.length > 0) {
+        const location = r.data[0];
+        return { lat: parseFloat(location.lat), lng: parseFloat(location.lon), name: location.display_name };
+      }
+      return null;
+    };
+
+    if ((!pLat || !pLng) && pickup) {
+      const pGeo = await geocode(pickup);
+      if (pGeo) {
+        pLat = pGeo.lat;
+        pLng = pGeo.lng;
+      }
+    }
+
+    if ((!dLat || !dLng) && dropoff) {
+      const dGeo = await geocode(dropoff);
+      if (dGeo) {
+        dLat = dGeo.lat;
+        dLng = dGeo.lng;
+      }
+    }
+
+    if (!pLat || !pLng || !dLat || !dLng) {
+      return res.status(400).json({ message: 'Unable to resolve both pickup and dropoff locations.' });
+    }
+
+    const getDistanceKm = (lat1, lon1, lat2, lon2) => {
+      const toRad = (x) => (x * Math.PI) / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    };
+
+    const distanceKm = getDistanceKm(pLat, pLng, dLat, dLng);
+    const estimatedDuration = Math.max(5, Math.ceil((distanceKm / 30) * 60));
+
+    const pickupArea = pickup ? pickup.split(',')[0].trim().toLowerCase() : 'unknown';
+    const dropoffArea = dropoff ? dropoff.split(',')[0].trim().toLowerCase() : 'unknown';
+
+    const priceRecommended = await DynamicPricingService.getPriceRecommendation({
+      pickupLat: pLat,
+      pickupLng: pLng,
+      dropoffLat: dLat,
+      dropoffLng: dLng,
+      distanceKm,
+      estimatedDuration,
+      pickupArea,
+      dropoffArea
+    });
+
+    res.json({
+      success: true,
+      price: priceRecommended,
+      distanceKm: Number(distanceKm.toFixed(2)),
+      durationMin: estimatedDuration,
+      pickupCoords: { lat: pLat, lng: pLng },
+      dropoffCoords: { lat: dLat, lng: dLng }
+    });
+  } catch (error) {
+    console.error('Price estimate error:', error);
+    res.status(500).json({ message: error.message || 'Failed to calculate price estimate' });
+  }
+};
+
+// 8. Chat: Send Message
 export const sendTripMessage = async (req, res) => {
   try {
     const { tripId, text, sender } = req.body; // sender: 'client' or 'rider'
@@ -237,6 +363,57 @@ export const updateTripLocation = async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 7. AI-Powered GPS Tracking with Route Optimization
+export const getAIGPSTracking = async (req, res) => {
+  try {
+    const { tripId } = req.params;
+    
+    const trip = await Trip.findById(tripId)
+      .populate('riderId', 'firstName lastName phone rating currentLocation')
+      .populate('clientId', 'firstName lastName phone');
+    
+    if (!trip) {
+      return res.status(404).json({ message: "Trip not found" });
+    }
+    
+    if (!trip.currentLocation || !trip.currentLocation.lat) {
+      return res.status(400).json({ message: "Rider location not available yet" });
+    }
+    
+    // Get AI-powered route optimization and ETA
+    const aiTracking = await RiderMatchingService.optimizeRouteAndPredictETA({
+      riderId: trip.riderId._id,
+      tripId: trip._id,
+      currentLat: trip.currentLocation.lat,
+      currentLng: trip.currentLocation.lng,
+      pickupLat: trip.pickupLocation.lat,
+      pickupLng: trip.pickupLocation.lng,
+      dropoffLat: trip.dropoffLocation.lat,
+      dropoffLng: trip.dropoffLocation.lng
+    });
+    
+    res.json({
+      success: true,
+      trip: {
+        id: trip._id,
+        status: trip.status,
+        rider: {
+          name: `${trip.riderId.firstName} ${trip.riderId.lastName}`,
+          phone: trip.riderId.phone,
+          rating: trip.riderId.rating,
+          currentLocation: trip.currentLocation
+        },
+        pickup: trip.pickupLocation,
+        dropoff: trip.dropoffLocation
+      },
+      aiTracking
+    });
+  } catch (error) {
+    console.error("AI GPS tracking error:", error);
     res.status(500).json({ message: error.message });
   }
 };

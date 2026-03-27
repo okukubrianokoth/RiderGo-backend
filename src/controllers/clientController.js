@@ -7,6 +7,8 @@ import bcrypt from "bcryptjs";
 import axios from "axios";
 import Wallet from "../models/Wallet.js";
 import Trip from "../models/Trip.js";
+import RiderMatchingService from "../services/RiderMatchingService.js";
+import { broadcastTripsUpdate } from "../config/SocketIOConfig.js";
 
 const generateToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
@@ -152,12 +154,12 @@ export const registerClient = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Send OTP via email
-    const otpResult = await sendSimpleOtp(phone, email);
+    // Send OTP via email (strict)
+    const otpResult = await sendSimpleOtp(phone, email, { requireEmail: false });
     if (!otpResult.success) {
       return res.status(500).json({
         success: false,
-        message: "Failed to send OTP. Please try again."
+        message: `Failed to send OTP email: ${otpResult.error}`
       });
     }
 
@@ -209,6 +211,13 @@ export const loginClient = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Please use OTP verification for this account. Password not set."
+      });
+    }
+
+    if (client.status === 'blocked') {
+      return res.status(403).json({
+        success: false,
+        message: "Your account is blocked. Access denied."
       });
     }
 
@@ -334,11 +343,11 @@ export const resendClientOtp = async (req, res) => {
     }
 
     // Send OTP via email
-    const otpResult = await sendSimpleOtp(client.phone, client.email);
+    const otpResult = await sendSimpleOtp(client.phone, client.email, { requireEmail: true });
     if (!otpResult.success) {
       return res.status(500).json({
         success: false,
-        message: "Failed to resend OTP. Please try again."
+        message: `Failed to resend OTP email: ${otpResult.error}`
       });
     }
 
@@ -552,14 +561,92 @@ export const createDelivery = async (req, res) => {
 
     await newTrip.save();
 
+    // background rider matching loop (non-blocking)
+    autoMatchTripForRoute(newTrip._id).catch((err) => {
+      console.error("Auto-match trip error:", err);
+    });
+
     res.json({
       success: true,
-      message: "Delivery request created successfully",
+      message: "Delivery request created successfully. Searching for riders.",
       delivery: newTrip
     });
   } catch (error) {
     console.error("Create delivery error:", error);
     res.status(500).json({ success: false, message: "Failed to create delivery request" });
+  }
+};
+
+const autoMatchTripForRoute = async (tripId, maxMinutes = 10) => {
+  const maxMs = maxMinutes * 60 * 1000;
+  const timeout = Date.now() + maxMs;
+  const pollMs = 5000;
+
+  while (Date.now() < timeout) {
+    const trip = await Trip.findById(tripId);
+    if (!trip) break;
+
+    if (trip.status === 'accepted' || trip.status === 'in_progress' || trip.status === 'completed' || trip.status === 'cancelled') {
+      break;
+    }
+
+    // find riding candidates
+    const candidates = await RiderMatchingService.findBestRiders({
+      tripId: trip._id,
+      pickupLat: trip.pickupLocation.lat,
+      pickupLng: trip.pickupLocation.lng,
+      dropoffLat: trip.dropoffLocation.lat,
+      dropoffLng: trip.dropoffLocation.lng
+    });
+
+    if (candidates && candidates.length > 0) {
+      const selected = candidates[0];
+      trip.status = 'assigned';
+      trip.riderId = selected._id;
+      await trip.save();
+
+      broadcastTripsUpdate(trip._id, {
+        status: trip.status,
+        message: 'Rider found and assignment requested',
+        riderId: selected._id
+      });
+
+      // If rider doesn't accept within some time, continue searching
+      const assignmentDeadline = Date.now() + 30000;
+      while (Date.now() < assignmentDeadline) {
+        const refreshed = await Trip.findById(tripId);
+        if (!refreshed) break;
+
+        if (refreshed.status === 'accepted') {
+          broadcastTripsUpdate(trip._id, { status: 'accepted', riderId: refreshed.riderId });
+          return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+
+      // rider did not accept in time, mark back to pending to search again
+      const resetTrip = await Trip.findById(tripId);
+      if (resetTrip && resetTrip.status === 'assigned') {
+        resetTrip.status = 'pending';
+        resetTrip.riderId = null;
+        await resetTrip.save();
+        broadcastTripsUpdate(trip._id, { status: 'pending', message: 'Rider did not accept; retrying...' });
+      }
+    } else {
+      // no riders now; keep polling
+      broadcastTripsUpdate(trip._id, { status: 'pending', message: 'No riders available yet; searching...' });
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+
+  // final fallback if still pending/unassigned
+  const finalTrip = await Trip.findById(tripId);
+  if (finalTrip && finalTrip.status === 'pending') {
+    finalTrip.status = 'pending';
+    await finalTrip.save();
+    broadcastTripsUpdate(tripId, { status: 'pending', message: 'Could not assign a rider in time. Please try again later.' });
   }
 };
 

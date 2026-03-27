@@ -8,6 +8,7 @@ import {
   getRiderProfile,
   paySubscription,
   getSubscriptionStatus,
+  grantFreeSubscription,
   updateRiderStatus,
   updateRiderLocation,
   getAvailableTrips,
@@ -45,6 +46,7 @@ router.put(
 // 💰 Subscription payment
 router.post("/subscription/pay", protectRider, paySubscription);
 router.get("/subscription/status", protectRider, getSubscriptionStatus);
+router.post("/subscription/grant-free", protectRider, grantFreeSubscription);
 
 // 🏁 Example protected route (rider must have active subscription)
 router.get("/home", protectRider, checkSubscription, (req, res) => {

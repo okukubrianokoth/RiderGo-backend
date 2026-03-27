@@ -505,6 +505,7 @@
             <a href="#" class="nav-link active" data-tab="pricing">Pricing</a>
             <a href="#" class="nav-link" data-tab="surge">Surge Pricing</a>
             <a href="#" class="nav-link" data-tab="peakHours">Peak Hours</a>
+            <a href="#" class="nav-link" data-tab="riders">Verify Riders</a>
             <a href="#" class="nav-link" data-tab="dashboard">Dashboard</a>
             <a href="#" class="logout-btn">Logout</a>
         </div>
@@ -731,13 +732,28 @@
                 </div>
             </div>
         </div>
+
+        <!-- Riders Verification Tab -->
+        <div class="tab-content" id="riders-tab">
+            <div class="header">
+                <h2>🛡️ Rider Verification</h2>
+                <p>Approve or reject new rider applications</p>
+            </div>
+            <div class="card">
+                <div id="ridersMessage" class="message"></div>
+                <h3>Pending Approvals</h3>
+                <div id="pendingRidersList">
+                    <!-- Content populated by JS -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         // ==========================================
         // Configuration
         // ==========================================
-        const API_BASE_URL = 'http://localhost:3000/api'; // Change to your API URL
+        const API_BASE_URL = 'http://localhost:5000/api'; // Corrected port
         const adminToken = localStorage.getItem('adminToken');
         
         // Example peak hours data (from localStorage or API)
@@ -852,6 +868,7 @@
                     e.preventDefault();
                     const tabName = link.dataset.tab;
                     switchTab(tabName);
+                    if (tabName === 'riders') loadPendingRiders();
                 });
             });
 
@@ -954,6 +971,64 @@
                 tab.classList.remove('active');
             });
             document.getElementById(tabName + '-tab').classList.add('active');
+        }
+
+        // ==========================================
+        // Rider Verification Logic
+        // ==========================================
+        async function loadPendingRiders() {
+            const list = document.getElementById('pendingRidersList');
+            if (!list) return;
+            list.innerHTML = '<div class="loading active"><div class="loading-spinner"></div>Loading applications...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/riders/pending`, {
+                    headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+                const data = await response.json();
+                
+                if (data.success && data.riders && data.riders.length > 0) {
+                    list.innerHTML = data.riders.map(rider => `
+                        <div class="peak-hour-item">
+                            <div class="peak-hour-info">
+                                <div class="peak-hour-day">${rider.firstName} ${rider.lastName}</div>
+                                <div class="peak-hour-time">${rider.phone} | ${rider.email}</div>
+                            </div>
+                            <div class="button-group" style="margin-top: 0;">
+                                <button class="btn-primary" style="padding: 8px 16px;" onclick="verifyRiderAction('${rider._id}', 'approve')">Approve</button>
+                                <button class="btn-danger" style="padding: 8px 16px;" onclick="verifyRiderAction('${rider._id}', 'reject')">Reject</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No pending rider applications.</p>';
+                }
+            } catch (error) {
+                list.innerHTML = '<p class="error">Failed to load pending riders.</p>';
+            }
+        }
+
+        window.verifyRiderAction = async function(riderId, action) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/verify-rider`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminToken}`
+                    },
+                    body: JSON.stringify({ riderId, action })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('ridersMessage', `Rider ${action}d successfully`, 'success');
+                    loadPendingRiders();
+                    loadStats();
+                } else {
+                    showMessage('ridersMessage', data.message || 'Action failed', 'error');
+                }
+            } catch (error) {
+                showMessage('ridersMessage', 'Network error. Try again.', 'error');
+            }
         }
 
         // ==========================================

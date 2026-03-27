@@ -11,6 +11,7 @@ const clientSchema = new mongoose.Schema(
     phone: { type: String, unique: true, required: true },
     password: { type: String }, // optional future use
     isVerified: { type: Boolean, default: false },
+    status: { type: String, enum: ["active", "blocked"], default: "active" },
     lastOtpSent: Date, // Track OTP sending for rate limiting
   },
   { timestamps: true }

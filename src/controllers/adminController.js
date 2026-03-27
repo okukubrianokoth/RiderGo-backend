@@ -346,3 +346,34 @@ export const updatePeakHour = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// BLOCK/UNBLOCK USER CONTROLS
+export const toggleRiderBlock = async (req, res) => {
+  try {
+    const { riderId } = req.body;
+    const rider = await Rider.findById(riderId);
+    if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+
+    rider.status = rider.status === 'blocked' ? 'approved' : 'blocked';
+    await rider.save();
+
+    res.json({ success: true, message: `Rider is now ${rider.status}`, rider });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const toggleClientBlock = async (req, res) => {
+  try {
+    const { clientId } = req.body;
+    const client = await Client.findById(clientId);
+    if (!client) return res.status(404).json({ success: false, message: "Client not found" });
+
+    client.status = client.status === 'blocked' ? 'active' : 'blocked';
+    await client.save();
+
+    res.json({ success: true, message: `Client is now ${client.status}`, client });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
